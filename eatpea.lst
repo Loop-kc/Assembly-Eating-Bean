@@ -1,0 +1,433 @@
+Microsoft (R) Macro Assembler Version 6.11		    05/12/24 23:44:26
+tempfile.asm						     Page 1 - 1
+
+
+ 0000				DATAS SEGMENT
+				    ; 延迟时间和暂停计数器
+ 0000 03			    DELAYTIME db 03H ; 延迟时间，用于下落
+ 0001 00			    pause_counter db 0 ; 定义一个字节型变量 pause_counter，初始化为 0
+ 0002 0000			    current_position dw ? ; 用来存储吃豆人的当前位置
+				    ; 模式相关变量
+ 0004 00			    MODEFLAG db 0   ; 模式选择标志
+ 0005 53 54 41 52 54		 	MODE1 db 'START' ; 模式 1: 开始
+ 000A 51 55 49 54		    MODE2 db 'QUIT'; 模式 2: 退出
+ 000E 4D 4F 44 45 20 53		    TIPS3 db 'MODE SELECT' ; 显示模式选择字符串
+       45 4C 45 43 54
+				    
+				    ; 垂直空格
+ 0019 49 0E 4E 0E 53 0E		    TIPS1 db 'I', 0EH, 'N', 0EH, 'S', 0EH, 'T', 0EH, 'R', 0EH, 'U', 0EH, 'C', 0EH, 'T', 0EH, 'I', 0EH, 'O', 0EH, 'N', 0EH, ':', 0EH
+       54 0E 52 0E 55 0E
+       43 0E 54 0E 49 0E
+       4F 0E 4E 0E 3A 0E
+				    ; 数据段代码
+ 0031 57 45 4C 43 4F 4D		    WELCOME_MSG db 'WELCOME TO THE GAME!', 13, 10, '$'
+       45 20 54 4F 20 54
+       48 45 20 47 41 4D
+       45 21 0D 0A 24
+ 0048 47 4F 4F 44 20 42		    GOODBYE_MSG db 'GOOD BYE!', 13, 10, '$'
+       59 45 21 0D 0A 24
+
+ 0054 0000			    temp1 dw ?
+ 0056 0000				temp2 dw ?;定义段temp1和temp2
+ 0058 50 72 65 73 73 20			STRING  db  'Press Space to Start or Press AnyKey to return',13,10,'$';定义字符串
+       53 70 61 63 65 20
+       74 6F 20 53 74 61
+       72 74 20 6F 72 20
+       50 72 65 73 73 20
+       41 6E 79 4B 65 79
+       20 74 6F 20 72 65
+       74 75 72 6E 0D 0A
+       24
+				      
+ 0089 4E 61 6D 65 3A 4C		    mes1 db 'Name:Liu Peng';姓名
+       69 75 20 50 65 6E
+       67
+ 0096 53 74 75 64 65 6E		    mes2 db 'Student No:8208220433';学号
+       74 20 4E 6F 3A 38
+       32 30 38 32 32 30
+       34 33 33
+ 00AB 43 6C 61 73 73 3A		    mes3 db 'Class:CS2207';班级  
+       43 53 32 32 30 37
+ 00B7				DATAS ENDS
+
+ 0000				STACKS SEGMENT
+ 0000				STACKS ENDS
+
+ 0000				CODES SEGMENT
+				    assume cs:codes,ds:datas,ss:stacks
+				    ;吃豆子过程中键入相关
+ 0000  E4 60				in al,60h  ; 读取键盘输入
+ 0002  3C 39				cmp al,57 ;比较送到al的数与57(在ascll码中代表十进制的9）的差
+ 0004  75 03				jnz nospace; 如果不相等，跳转到 nospace（不是空格键）
+ 0006  B9 0001				mov cx,1
+ 0009					nospace:
+ 0009  B0 20				mov al,20h  ; 将空格字符的 ASCII 值移动到 al 寄存器
+ 000B  E6 20				out 20h,al ; 将 al 输出到端口 20H
+ 000D  CF				iret ;中断返回程序
+				    
+ 000E				START:
+ 000E  B8 ---- R		    mov ax,datas
+ 0011  8E D8			    mov ds,ax
+					; 将光标移动到屏幕中间
+ 0013  B4 02				mov ah, 02h ; 设置光标位置函数
+ 0015  B7 00				mov bh, 0   ; 页码为0
+ 0017  B6 0A				mov dh, 10  ; 将光标的行位置设置为12
+ 0019  B2 1B				mov dl, 27  ; 将光标的列位置设置为35
+ 001B  CD 10				int 10h     ;
+					; 显示欢迎信息
+ 001D  BE 0031 R		    mov si, offset WELCOME_MSG
+ 0020  E8 0137			    call PrintStringDelay
+				    
+ 0023				SELECT:   
+ 0023  E8 0147				 call Save
+ 0026  BD 000E R			 mov bp, offset TIPS3
+ 0029  B9 000B				 mov cx, 11d;17，字符串长度
+ 002C  B6 07				 mov dh, 7;显示行的位置
+ 002E  B2 21				 mov dl, 33;显示列的位置
+ 0030  B0 01				 mov al, 01
+ 0032  B3 0E				 mov bl, 0EH;字符显示的颜色，黄色
+ 0034  B4 13				 mov ah, 13h;显示带属性的字符串
+ 0036  CD 10				 int 10h
+ 0038  E8 0147				 call MODESELECT;选择模式
+ 003B  80 3E 0004 R 00			 cmp MODEFLAG, 0
+ 0040  74 03				 je GOGAME1
+ 0042  E9 00AB				 jmp exit
+				 
+ 0045				GOGAME1:
+ 0045  B4 02			 	mov ah,02h;设置光标位置
+ 0047  B7 00				mov bh,0
+ 0049  B2 00				mov dl,0
+ 004B  B6 0A				mov dh,10;要在屏幕的第十行显示字符
+ 004D  CD 10				int 10h
+					
+ 004F  B4 02				mov ah,02H ;设置光标位置
+ 0051  B2 2E				mov dl,'.' ;取要显示的字符到DL中豆子 
+ 0053  B9 07D0				mov cx,25*80 ;默认最大显示量就是80*25
+ 0056					setpoint:
+ 0056  CD 21				int 21H 
+ 0058  E2 FC				loop setpoint ;循环以在屏幕上显示 '.'
+
+					;输入一个字符，判断是否继续 
+					;给出输入提示
+ 005A  B8 ---- R		    mov  ax,datas
+ 005D  8E D8			    mov  ds,ax
+ 005F  8D 16 0058 R		    lea  dx,string
+ 0063  B4 09			    mov  ah,9
+ 0065  CD 21			    int  21h
+
+ 0067  B4 07				mov ah,07h ;键盘输入
+ 0069  CD 21				int 21h 
+ 006B  3C 20				cmp al,' ' ;比较指令,判断空格
+ 006D  75 B4				jnz SELECT ;不为空格则跳转
+					
+					;cx/dx入栈保护现场(保证空格能使用）
+ 006F  B8 0000				mov ax,0
+ 0072  8E D8				mov ds,ax 
+ 0074  B8 ---- R			mov ax,datas 
+ 0077  8E C0				mov es,ax 
+ 0079  BB 0026				mov bx,9*4+2 
+ 007C  8B 07				mov ax,[bx] 
+ 007E  26: A3 0054 R			mov es:temp1,ax 
+ 0082  B8 ---- R			mov ax,codes 
+ 0085  89 07				mov [bx],ax 
+ 0087  BB 0024				mov bx,9*4  
+ 008A  8B 07				mov ax,[bx] 
+ 008C  26: A3 0056 R			mov es:temp2,ax 
+ 0090  C7 07 0000			mov word ptr [bx],0 	
+					;设置光标位置
+ 0094  B4 02				mov ah,02H  
+ 0096  B7 00				mov bh,0 
+ 0098  33 D2				xor dx,dx ;清0
+ 009A  CD 10				int 10H
+				 	;清空屏幕并显示豆子和吃豆人
+ 009C  B8 B800				mov ax,0B800H 
+ 009F  8E D8				mov ds,ax
+ 00A1  33 DB				xor bx,bx
+ 00A3  B9 07D0				mov cx,80*25;默认最大显示量就是80*25
+ 00A6				eatpea:
+ 00A6  BE B7FF				mov si,0B7FFH;代表在25×80的文本显示方式下
+ 00A9					nextone:
+ 00A9  83 EE 01					sub si,1;将si-1的值送到si
+ 00AC  75 FB					jnz nextone;不为0就继续si-1，即吃下一个豆子	
+ 00AE  C6 07 20					mov byte ptr [bx],' ';把“ ”的第一个字节的内容送到bx
+ 00B1  C6 47 02 43				mov byte ptr [bx+2],'C';把“C”的第一个字节的内容送到bx+2
+ 00B5  83 C3 02					add bx,2	
+ 00B8  E2 EC				loop eatpea ;吃80*25个豆子
+					;用于吃豆子的循环，通过在屏幕上替换字符来模拟吃豆子的过程。
+				;   在循环中，每次都将当前位置的字符替换为一个空格，表示豆子被吃掉了。
+				;同时，在当前位置的下一个位置（即 `BX+2` 处），将字符替换为 'C'，表示吃豆人的位置。
+					;ax/dx出栈恢复现场(按空格会重置）
+ 00BA  B8 0000				mov ax,0
+ 00BD  8E D8				mov ds,ax
+ 00BF  BB 0026				mov bx,9*4+2
+ 00C2  26: A1 0054 R			mov ax,es:temp1
+ 00C6  89 07				mov [bx],ax
+ 00C8  BB 0024				mov bx,9*4
+ 00CB  26: A1 0056 R			mov ax,es:temp2
+ 00CF  89 07				mov [bx],ax
+ 00D1  E8 0000				call pause_game
+					
+ 00D4				pause_game:
+				    ; 暂停游戏，等待用户按空格键继续
+ 00D4  B4 07			    mov ah, 07H         ; 键盘输入
+ 00D6  CD 21			    int 21H             
+ 00D8  3C 20			    cmp al, ' '         ; 检查是否按下了空格键
+ 00DA  74 03 E9 FF44		    jne SELECT          ; 如果不是空格键，继续检查是否暂停
+ 00DF  FE 06 0001 R		    inc byte ptr [pause_counter] ; 每次按下空格键计数器加 1
+ 00E3  E8 0000			    call check_space    
+
+
+ 00E6				check_space:
+ 00E6  A0 0001 R		    mov al, [pause_counter]  ; 将按下空格键的次数加载到 al 中
+ 00E9  24 00			    and al, 0               ; 检查 al 的最低位，以判断按下空格键的次数是奇数还是偶数
+ 00EB  75 E7			    jnz pause_game          ; 如果按下奇数次空格键，继续暂停游戏
+ 00ED  E9 FF55			    jmp GOGAME1          ; 如果按下偶数次空格键，跳到 GOGAME1 标签处
+
+ 00F0				exit:
+ 00F0  E8 007A				call Save
+					
+ 00F3				goodbye:
+					 ; 将光标移动到屏幕中间
+ 00F3  B4 02				 mov ah, 02h ; 设置 AH 以设置光标位置函数
+ 00F5  B7 00				 mov bh, 0   ; 页码为0
+ 00F7  B6 0A				 mov dh, 10  ; 将光标的行位置设置为12
+ 00F9  B2 1E				 mov dl, 30  ; 将光标的列位置设置为35
+ 00FB  CD 10				 int 10h     ; 调用 BIOS 中断以设置光标位置
+				 
+ 00FD  BE 0048 R			 mov si, offset GOODBYE_MSG
+ 0100  E8 0057				 call PrintStringDelay
+ 0103  E8 0067				 call Save
+					 
+ 0106				end_string:
+ 0106  BD 0089 R			 mov bp, offset mes1
+ 0109  B9 000D				 mov cx, 13d ;表示字符串的长度
+ 010C  B6 05				 mov dh, 5
+ 010E  B2 0D				 mov dl, 13
+ 0110  B0 01				 mov al, 01
+ 0112  B3 0E				 mov bl, 0Eh
+ 0114  B4 13				 mov ah, 13h
+ 0116  CD 10				 int 10h
+					 
+ 0118  BD 0096 R			 mov bp, offset mes2
+ 011B  B9 0015				 mov cx, 21d
+ 011E  B6 06				 mov dh, 6
+ 0120  B2 0D				 mov dl, 13
+ 0122  B0 01				 mov al, 01
+ 0124  B3 0E				 mov bl, 0Eh
+ 0126  B4 13				 mov ah, 13h
+ 0128  CD 10				 int 10h
+					 
+ 012A  BD 00AB R			 mov bp, offset mes3
+ 012D  B9 000D				 mov cx, 13d
+ 0130  B6 07				 mov dh, 7
+ 0132  B2 0D				 mov dl, 13
+ 0134  B0 01				 mov al, 01
+ 0136  B3 0E				 mov bl, 0Eh
+ 0138  B4 13				 mov ah, 13h
+ 013A  CD 10				 int 10h
+					 
+ 013C  B8 4C00				 mov ax,4C00H;
+ 013F  CD 21				 int 21H;调用系统中断  
+
+ 0141				DELAY PROC    ; 延时函数
+ 0141  B4 00				 mov ah, 0	
+ 0143  CD 1A				 int 1ah    ; 直接读取时钟计数器
+ 0145  8B DA				 mov bx, dx
+ 0147  B8 0000				 mov ax, 0
+ 014A  A0 0000 R			 mov al, DELAYTIME  ; 加上DELAY间隔
+ 014D  03 D8				 add bx, ax
+ 014F  B4 00				DELAYLOP: mov AH, 0
+ 0151  CD 1A				  int 1ah
+ 0153  3B D3				  cmp dx, bx
+ 0155  74 02				  je DELAYNEXT
+ 0157  EB F6				  jmp DELAYLOP
+ 0159  C3				DELAYNEXT: RET
+ 015A				DELAY ENDP   
+				    
+ 015A				PrintStringDelay PROC
+				    ; 打印字符串，带延迟效果
+ 015A				    NEXT_CHAR:
+ 015A  8A 04			        mov al, [si]
+ 015C  3C 24			        cmp al, '$'        ; 判断字符串结束
+ 015E  74 0C			        je END_PRINT
+ 0160  B4 0E			        mov ah, 0EH        ; 显示字符
+ 0162  B7 00			        mov bh, 0
+ 0164  CD 10			        int 10h
+ 0166  E8 FFD8			        call Delay
+ 0169  46			        inc si
+ 016A  EB EE			        jmp NEXT_CHAR
+ 016C				    END_PRINT:
+ 016C  C3			        RET
+ 016D				PrintStringDelay ENDP    
+
+ 016D				Save PROC
+ 016D  B8 ---- R		    mov ax, datas
+ 0170  8E D8			    mov ds, ax
+ 0172  8E C0			    mov es, ax
+ 0174  BB 0000			    mov bx, 0       ; 保存当前显示方式
+ 0177  B4 0F			    mov ah, 0FH     ; 获取视频模式
+ 0179  CD 10			    int 10h
+
+ 017B  B0 03			    mov al, 03h     ; 设置显示模式
+ 017D  B4 00			    mov ah, 0
+ 017F  CD 10			    int 10h
+ 0181  C3			    RET             ; 返回
+ 0182				Save ENDP
+
+ 0182				MODESELECT PROC    ; MODE选择菜单
+ 0182					MODESELECTLOP1: 
+ 0182  80 3E 0004 R FF		  		CMP MODEFLAG, 0FFH ; 判定当前选项
+ 0187  74 3A			  		JE MODESELECTLOP2   
+ 0189  B4 06					MOV AH, 06H ;表示向上滚动窗口
+ 018B  B0 00			  		MOV AL, 0;滚动窗口的行数为 0
+ 018D  B7 07			  		MOV BH, 07H
+ 018F  B5 0C			  		MOV CH, 12D;滚动窗口的起始行号
+ 0191  B1 00			  		MOV CL, 0;滚动窗口的起始列号
+ 0193  B6 0D			  		MOV DH, 13D;滚动窗口的结束行号
+ 0195  B2 4F			  		MOV DL, 79;滚动窗口的结束列号
+ 0197  CD 10			  		INT 10H
+				        ; 显示模式选项
+ 0199  B4 13			  		MOV AH, 13H
+ 019B  B3 9E			  		MOV BL, 9EH
+ 019D  B7 00			  		MOV BH, 0
+ 019F  BD 0005 R		  		MOV BP, OFFSET MODE1
+ 01A2  B0 01			  		MOV AL, 1
+ 01A4  B9 0005			  		MOV CX, 5; 长度
+ 01A7  B6 0B			  		MOV DH, 11; 行
+ 01A9  B2 20			 		MOV DL, 32D ; 列
+ 01AB  CD 10			  		INT 10H
+				  		; 显示模式选项
+ 01AD  B4 13			  		MOV AH, 13H
+ 01AF  B3 08			  		MOV BL, 08H
+ 01B1  B7 00			  		MOV BH, 0
+ 01B3  BD 000A R		  		MOV BP, OFFSET MODE2
+ 01B6  B0 01			  		MOV AL, 1
+ 01B8  B9 0004			  		MOV CX, 4
+ 01BB  B6 0B			  		MOV DH, 11
+ 01BD  B2 29			  		MOV DL, 41D
+ 01BF  CD 10			  		INT 10H
+ 01C1  EB 38			  		JMP MODESELECTNEXT
+					
+ 01C3					MODESELECTLOP2: 
+ 01C3  B4 06					mov ah, 06h ; 表示向上滚动窗口
+ 01C5  B0 00					mov al, 0   ; 表示滚动窗口的行数为 0
+ 01C7  B7 07					mov bh, 07h
+ 01C9  B5 0C					mov ch, 12d ; 滚动窗口的起始行号
+ 01CB  B1 00					mov cl, 0   ; 滚动窗口的起始列号
+ 01CD  B6 13					mov dh, 19d
+ 01CF  B2 4F					mov dl, 79
+ 01D1  CD 10					int 10h
+				      ; 显示模式选项
+ 01D3  B4 13					mov ah, 13h
+ 01D5  B3 08					mov bl, 08h
+ 01D7  B7 00					mov bh, 0
+ 01D9  BD 0005 R				mov bp, offset MODE1
+ 01DC  B0 01					mov al, 1
+ 01DE  B9 0005					mov cx, 5
+ 01E1  B6 0B					mov dh, 11
+ 01E3  B2 20					mov dl, 32d
+ 01E5  CD 10					int 10h
+				      ; 显示模式选项
+ 01E7  B4 13					mov ah, 13h
+ 01E9  B3 9E					mov bl, 9eh
+ 01EB  B7 00					mov bh, 0
+ 01ED  BD 000A R				mov bp, offset MODE2
+ 01F0  B0 01					mov al, 1
+ 01F2  B9 0004					mov cx, 4
+ 01F5  B6 0B					mov dh, 11
+ 01F7  B2 29					mov dl, 41d
+ 01F9  CD 10					int 10h
+ 01FB					MODESELECTNEXT:
+ 01FB  B4 00					mov ah, 00  ; 获取输入
+ 01FD  CD 16					int 16h
+ 01FF  80 FC 4B					cmp ah, 4bh  ; 检查左箭头
+ 0202  74 0B					je MODESELECTRESET  ; 如果左箭头，跳转
+ 0204  80 FC 4D					cmp ah, 4dh   ; 检查右箭头
+ 0207  74 06					je MODESELECTRESET
+ 0209  80 FC 1C					cmp ah, 1ch  ; 回车
+ 020C  75 ED					jne MODESELECTNEXT ; 输入非法
+ 020E  C3			  	RET
+ 020F					MODESELECTRESET:
+ 020F  F6 16 0004 R				not MODEFLAG ; 标志各位取反 
+ 0213  E9 FF6C			  		jmp MODESELECTLOP1
+ 0216				MODESELECT ENDP
+ 0216  B4 4C				mov ah, 4ch
+ 0218  CD 21				int 21h
+ 021A				CODES ENDS
+				    END START
+
+
+
+
+
+
+
+
+Microsoft (R) Macro Assembler Version 6.11		    05/12/24 23:44:26
+tempfile.asm						     Symbols 2 - 1
+
+
+
+
+Segments and Groups:
+
+                N a m e                 Size     Length   Align   Combine Class
+
+CODES  . . . . . . . . . . . . .	16 Bit	 021A	  Para	  Private 
+DATAS  . . . . . . . . . . . . .	16 Bit	 00B7	  Para	  Private 
+STACKS . . . . . . . . . . . . .	16 Bit	 0000	  Para	  Private 
+
+
+Procedures,  parameters and locals:
+
+                N a m e                 Type     Value    Attr
+
+DELAY  . . . . . . . . . . . . .	P Near	 0141	  CODES	Length= 0019 Public
+  DELAYLOP . . . . . . . . . . .	L Near	 014F	  CODES	
+  DELAYNEXT  . . . . . . . . . .	L Near	 0159	  CODES	
+MODESELECT . . . . . . . . . . .	P Near	 0182	  CODES	Length= 0094 Public
+  MODESELECTLOP1 . . . . . . . .	L Near	 0182	  CODES	
+  MODESELECTLOP2 . . . . . . . .	L Near	 01C3	  CODES	
+  MODESELECTNEXT . . . . . . . .	L Near	 01FB	  CODES	
+  MODESELECTRESET  . . . . . . .	L Near	 020F	  CODES	
+PrintStringDelay . . . . . . . .	P Near	 015A	  CODES	Length= 0013 Public
+  NEXT_CHAR  . . . . . . . . . .	L Near	 015A	  CODES	
+  END_PRINT  . . . . . . . . . .	L Near	 016C	  CODES	
+Save . . . . . . . . . . . . . .	P Near	 016D	  CODES	Length= 0015 Public
+
+
+Symbols:
+
+                N a m e                 Type     Value    Attr
+
+DELAYTIME  . . . . . . . . . . .	Byte	 0000	  DATAS	
+GOGAME1  . . . . . . . . . . . .	L Near	 0045	  CODES	
+GOODBYE_MSG  . . . . . . . . . .	Byte	 0048	  DATAS	
+MODE1  . . . . . . . . . . . . .	Byte	 0005	  DATAS	
+MODE2  . . . . . . . . . . . . .	Byte	 000A	  DATAS	
+MODEFLAG . . . . . . . . . . . .	Byte	 0004	  DATAS	
+SELECT . . . . . . . . . . . . .	L Near	 0023	  CODES	
+START  . . . . . . . . . . . . .	L Near	 000E	  CODES	
+STRING . . . . . . . . . . . . .	Byte	 0058	  DATAS	
+TIPS1  . . . . . . . . . . . . .	Byte	 0019	  DATAS	
+TIPS3  . . . . . . . . . . . . .	Byte	 000E	  DATAS	
+WELCOME_MSG  . . . . . . . . . .	Byte	 0031	  DATAS	
+check_space  . . . . . . . . . .	L Near	 00E6	  CODES	
+current_position . . . . . . . .	Word	 0002	  DATAS	
+eatpea . . . . . . . . . . . . .	L Near	 00A6	  CODES	
+end_string . . . . . . . . . . .	L Near	 0106	  CODES	
+exit . . . . . . . . . . . . . .	L Near	 00F0	  CODES	
+goodbye  . . . . . . . . . . . .	L Near	 00F3	  CODES	
+mes1 . . . . . . . . . . . . . .	Byte	 0089	  DATAS	
+mes2 . . . . . . . . . . . . . .	Byte	 0096	  DATAS	
+mes3 . . . . . . . . . . . . . .	Byte	 00AB	  DATAS	
+nextone  . . . . . . . . . . . .	L Near	 00A9	  CODES	
+nospace  . . . . . . . . . . . .	L Near	 0009	  CODES	
+pause_counter  . . . . . . . . .	Byte	 0001	  DATAS	
+pause_game . . . . . . . . . . .	L Near	 00D4	  CODES	
+setpoint . . . . . . . . . . . .	L Near	 0056	  CODES	
+temp1  . . . . . . . . . . . . .	Word	 0054	  DATAS	
+temp2  . . . . . . . . . . . . .	Word	 0056	  DATAS	
+
+	   0 Warnings
+	   0 Errors
